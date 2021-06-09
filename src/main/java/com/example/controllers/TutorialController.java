@@ -19,13 +19,17 @@ public class TutorialController {
     TutorialRepository tutorialRepository;
 
     @GetMapping("/tutorials")
-    public ResponseEntity<List<Tutorial>> getAllTutorials(@RequestParam(required = false) String title) {
+    public ResponseEntity<List<Tutorial>> getAllTutorials(@RequestParam(required = false) String title,
+                                                          @RequestParam(required = false) String description) {
         try{
+
             List<Tutorial> tutorials = new ArrayList<>();
-            if (title == null) {
-                tutorials.addAll(tutorialRepository.findAll());
-            } else {
+            if (title != null) {
                 tutorials.addAll(tutorialRepository.findByTitleContaining(title));
+            } else if (description != null) {
+                tutorials.addAll(tutorialRepository.findByDescriptionContaining(description));
+            } else {
+                tutorials.addAll(tutorialRepository.findAll());
             }
             if (tutorials.isEmpty()) {
                 return new ResponseEntity<>(HttpStatus.NO_CONTENT);
