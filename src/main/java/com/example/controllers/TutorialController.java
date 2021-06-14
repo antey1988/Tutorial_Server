@@ -3,13 +3,15 @@ package com.example.controllers;
 import com.example.entities.Tutorial;
 import com.example.repositories.TutorialRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @CrossOrigin(origins = "http://localhost:8081")
 @RestController
@@ -19,22 +21,69 @@ public class TutorialController {
     TutorialRepository tutorialRepository;
 
     @GetMapping("/tutorials")
-    public ResponseEntity<List<Tutorial>> getAllTutorials(@RequestParam(required = false) String title,
-                                                          @RequestParam(required = false) String description) {
+    public ResponseEntity<Object> getAllTutorials(@RequestParam(required = false) String title,
+                                                          @RequestParam(required = false) String description,
+                                                          @RequestParam(defaultValue = "0") int size,
+                                                          @RequestParam(defaultValue = "0") int page,
+                                                          @RequestParam(name = "sort", defaultValue = "id,desc") String[] sort) {
         try{
 
             List<Tutorial> tutorials = new ArrayList<>();
-            if (title != null) {
-                tutorials.addAll(tutorialRepository.findByTitleContaining(title));
-            } else if (description != null) {
-                tutorials.addAll(tutorialRepository.findByDescriptionContaining(description));
+
+            Sort sort1;
+            if (sort[0].contains(",")) {
+                List<Sort.Order> listOrders = new ArrayList<>();
+                Sort.Order order;
+                for (String string : sort) {
+                    String[] words = string.split(",");
+                    if (words[1].equalsIgnoreCase("asc")) {
+                        order = Sort.Order.asc(words[0]);
+                    } else {
+                        order = Sort.Order.desc(words[0]);
+                    }
+                    listOrders.add(order);
+                }
+                sort1 = Sort.by(listOrders);
             } else {
-                tutorials.addAll(tutorialRepository.findAll());
+                sort1 = Sort.by(sort[0]);
+                if (sort[1].equalsIgnoreCase("desc")) {
+                    sort1 = sort1.descending();
+                }
             }
-            if (tutorials.isEmpty()) {
-                return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+
+            Pageable pageable = null;
+            if (size > 0 && page >= 0 ) {
+                pageable = PageRequest.of(page, size, sort1);
             }
-            return  new ResponseEntity<>(tutorials, HttpStatus.OK);
+
+            if (pageable == null) {
+                if (title != null) {
+                    tutorials.addAll(tutorialRepository.findByTitleContaining(title, sort1));
+                } else if (description != null) {
+                    tutorials.addAll(tutorialRepository.findByDescriptionContaining(description, sort1));
+                } else {
+                    tutorials.addAll(tutorialRepository.findAll(sort1));
+                }
+                if (tutorials.isEmpty()) {
+                    return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+                }
+                return  new ResponseEntity<>(tutorials, HttpStatus.OK);
+            } else {
+                Page<Tutorial> currentPage;
+                if (title != null) {
+                    currentPage = tutorialRepository.findByTitleContaining(title, pageable);
+                } else if (description != null) {
+                    currentPage = tutorialRepository.findByDescriptionContaining(description, pageable);
+                } else {
+                    currentPage = tutorialRepository.findAll(pageable);
+                }
+                Map<String, Object> response = new HashMap<>();
+                response.put("tutorials" , currentPage.getContent());
+                response.put("currentPage", currentPage.getNumber());
+                response.put("totalItems", currentPage.getTotalElements());
+                response.put("totalPages", currentPage.getTotalPages());
+                return new ResponseEntity<>(response, HttpStatus.OK);
+            }
         } catch (Exception e) {
             return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
         }
